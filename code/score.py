@@ -52,30 +52,30 @@ with torch.no_grad():
 
     print(denoising_vector.shape)
 
-def forward_diffusion(img_tensor, num_steps):
+def forward_diffusion(latents, num_steps):
     """
-    Simulate forward diffusion by linearly adding noise to an image over t timesteps.
+    Simulate forward diffusion by linearly adding noise to latents over t timesteps.
     
     Args:
-    img_tensor (torch.Tensor): Input image tensor of shape (1, C, H, W)
+    latents (torch.Tensor): Input latent tensor from VAE encoding
     num_steps (int): Number of diffusion steps
     
     Returns:
-    List of torch.Tensor: Noisy images at each timestep
+    List of torch.Tensor: Noisy latents at each timestep
     """
-    device = img_tensor.device
-    noisy_images = []
+    device = latents.device
+    noisy_latents = []
     
     for t in range(num_steps):
-        # Generate noise
-        noise = torch.randn_like(img_tensor).to(device)
+        # Generate noise with same shape as latents
+        noise = torch.randn_like(latents).to(device)
         
         # Calculate the amount of noise to add (linear interpolation)
         alpha = t / (num_steps - 1)
         
-        # Add noise to the image
-        noisy_img = (1 - alpha) * img_tensor + alpha * noise
+        # Add noise to the latents
+        noisy_latent = (1 - alpha) * latents + alpha * noise
         
-        noisy_images.append(noisy_img)
+        noisy_latents.append(noisy_latent)
     
-    return noisy_images
+    return noisy_latents
