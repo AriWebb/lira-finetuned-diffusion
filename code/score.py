@@ -4,12 +4,17 @@ from torch import autocast
 from PIL import Image
 import torchvision.transforms as transforms
 
+# Number of diffusion steps
+# Also known as T later on
+NUM_INFERENCE_STEPS = 50
+
+SIGMA_STEPS_CAP = 1000
 
 pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5").to("cuda")
 
 # Use DDIMScheduler
 pipe.scheduler = DDIMScheduler.from_config(
-  pipe.scheduler.config, rescale_betas_zero_snr=True, timestep_spacing="trailing"
+  pipe.scheduler.config, rescale_betas_zero_snr=True, timestep_spacing="trailing", num_train_timesteps=100
 )
 
 img = Image.open("../datasets/MOODENG/IMG_3786.jpg")
@@ -26,17 +31,13 @@ transforms.Normalize([0.5], [0.5]) # Stable Diffusion normalization
 
 img_tensor = preprocess(img).unsqueeze(0).to("cuda")
 
+# not sure if have to multiply by .18??
 latents = pipe.vae.encode(img_tensor).latent_dist.sample() * 0.18215 
 
 print(latents.shape)
 
 
 noise = torch.randn(latents.shape).to("cuda")
-
-
-# Number of diffusion steps
-
-num_inference_steps = 50
 
 guidance_scale = 7.5 # This is the classifier-free guidance scale
 
@@ -88,49 +89,59 @@ def forward_diffusion(latents, num_steps):
 
 ### Solution 1 ###
 
-# Is this the right way to get T?
-# Timesteps are in descending order (1000 -> 0)
-timesteps = pipe.scheduler.timesteps
-
-alphas = pipe.scheduler.alphas_cumprod[timesteps]
-
-def sigma_step(alphas):
-  return torch.sqrt((1 - alphas) / alphas)
-
-sigmas = sigma_step(alphas)
-
 # Assume we have z_0, y, T (ask how to get these)
-Z = torch.zeros_like(sigmas)
+# y is text_embeddings from earlier in code
+# z_0 is the clean latents
+# latents = pipe.vae.encode(img_tensor).latent_dist.sample() * 0.18215 
 # y is the prompt, I believe
 y = prompt
+# T is a hyperparameter, num_inference_steps
+T = NUM_INFERENCE_STEPS
+# Timesteps are in descending order (1000 -> 0)
+# timesteps = pipe.scheduler.timesteps
 
+# should be lengh NUM_INFERENCE_STEPS
+alphas = pipe.scheduler.alphas_cumprod
+# alphas[0] = 1, so we are going to prepend
+alphas = torch.cat([torch.zeros(1, device=alphas.device), alphas[:-1]])
+
+# Don't need while we loop from 1 to SIGMA_STEPS_CAP
+# def sigma_step(alphas):
+#   return torch.sqrt((1 - alphas) / alphas)
+
+# sigmas = sigma_step(alphas)
+
+#TODO: dimensions wrong, each Z is a latent.
+Z = torch.zeros(1000, 1, device="cuda")
 # Not sure if this is the right way to get t
-def find_closest_timestep(alphas_t, alpha_line_s, pipe):
+def find_closest_timestep(s, alphas, alpha_lines):
   """
   Implements t(s) = argmin_t |alpha_line_s - alpha_t|
   Returns the timestep t where alpha_t is closest to alpha_line_s
   """
   # Calculate absolute differences and find minimum
-  diffs = torch.abs(alphas_t - alpha_line_s)
+  diffs = torch.abs(alphas[s] - alpha_lines[s])
   return torch.argmin(diffs)
 
-# structure to keep track of z hat
+# TODO: Don't need Z_line, they are just intermediate
 Z_line = torch.zeros_like(Z)
 # Forward Diffusion
-# due to timesteps, sigmas decreases from index 0 -> 1000. is that desired?
-for idx, s in enumerate(sigmas):
+# this isn't for range in sigmas, it is for range in cap range:
+# TODO: try to cache unet calls? probably going to be the same forward and backward
+for s in range(SIGMA_STEPS_CAP):
+  #TODO: parallelize alphas line computation outside of the loop and save it.
   alpha_line_s = 1 / (s**2 + 1)
-  Z_line[idx] = Z[idx] / (torch.sqrt(alpha_line_s))
+  Z_line[s] = Z[s] / (torch.sqrt(alpha_line_s))
   t_s = find_closest_timestep(alphas, alpha_line_s, pipe)
   if t_s == 0:
     # Use normal distribution sample when t_s is 0
-    normal_sample = torch.randn_like(Z[idx])
-    Z_line[idx + 1] = Z_line[idx] + normal_sample
+    normal_sample = torch.randn_like(Z[s])
+    Z_line[s + 1] = Z_line[s] + normal_sample
   else:
     # Regular case using UNet
-    Z_line[idx + 1] = Z_line[idx] + pipe.unet(Z[idx], y, t_s)
+    Z_line[s + 1] = Z_line[s] + pipe.unet(Z[s], y, t_s)
   # NOTE: better way to precompute alpha_hat_s+1 
-  Z[idx + 1] = Z_line[idx] / (torch.sqrt((s + 1)**2 + 1))
+  Z[s + 1] = Z_line[s] / (torch.sqrt((s + 1)**2 + 1))
 
 # Reverse Diffusion
 Z_hat = torch.zeros_like(Z)
@@ -149,8 +160,8 @@ log_p = sum(
 
 # Solution 2
 
-# TODO: Get number of trials (N) and (T) from somewhere
-N = 10
+# TODO: N will be hyperparameter we set
+N = 1000
 T = 1000
 
 # Assume we have z_0, y, T (ask how to get these)
@@ -160,6 +171,8 @@ y = prompt
 z_0 = 0
 U = torch.zeros(N, device="cuda")
 
+#TODO: alphas here only goes up to num_inference_steps (T)
+
 for i in range(1, N+1):
   t = torch.randint(0, len(alphas), (1,), device="cuda")
   # Sample epsilon from standard normal distribution N(0, I)
@@ -167,7 +180,7 @@ for i in range(1, N+1):
   z_t = torch.sqrt(alphas[t]) * z_0 + torch.sqrt(1 - alphas[t]) * epsilon
   z_t_minus_one = torch.sqrt(alphas[t-1]) * z_0 + torch.sqrt(1 - alphas[t-1]) * epsilon
   # Question: different T here for unet??
-  z_hat_0 = (z_t - torch.sqrt(1 - alphas[t]) * pipe.unet(z_t, y, t))
+  z_hat_0 = (z_t - torch.sqrt(1 - alphas[t]) * pipe.unet(z_t, y, t)) / torch.sqrt(alphas[t])
   z_hat_t_minus_one = torch.sqrt(alphas[t-1]) * z_hat_0 + torch.sqrt(1 - alphas[t-1] * pipe.unet(z_t, y, t))
   U[i-1] = torch.dot((z_hat_t_minus_one - z_t), (z_t_minus_one - z_t))
 
