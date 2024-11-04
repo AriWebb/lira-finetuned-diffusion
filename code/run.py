@@ -4,21 +4,24 @@ from torch import autocast
 from PIL import Image
 import torchvision.transforms as transforms
 import model_confidence
+import os
 
 # Number of diffusion steps
 # Also known as T later on
-NUM_INFERENCE_STEPS = 50
+NUM_INFERENCE_STEPS = 50 # number of steps for the diffusion model
+SIGMA_STEPS_CAP = 1000 # arbitrary value to cap the number
+NUMBER_TRIALS = 100 # maybe bump up to 1000 later, but takes a while to run solution_2
 
-SIGMA_STEPS_CAP = 1000
-
-pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5").to("cuda")
+pipe: StableDiffusionPipeline = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5").to("cuda")
 
 # Use DDIMScheduler
 pipe.scheduler = DDIMScheduler.from_config(
-  pipe.scheduler.config, rescale_betas_zero_snr=True, timestep_spacing="trailing", num_train_timesteps=100
+  pipe.scheduler.config, rescale_betas_zero_snr=True, timestep_spacing="trailing", num_train_timesteps=NUM_INFERENCE_STEPS
 )
 
-img = Image.open("../datasets/MOODENG/IMG_3786.jpg")
+# Load image with a relative path
+image_path = os.path.join(os.path.dirname(__file__), "../datasets/MOODENG/IMG_3786.jpg")
+img = Image.open(image_path)
 
 preprocess = transforms.Compose([
   transforms.Resize((512, 512)),
@@ -48,8 +51,8 @@ with torch.no_grad():
     # Sample calls to model_confidence for solution_1, solution_2
     # Make sure pipe has scheduler set up.
     # TODO: Workout SIGMA_STEPS_CAP vs NUM_INFERENCE_STEPS
-    model_confidence.solution_1(pipe, latents, text_embeddings, SIGMA_STEPS_CAP)
-    model_confidence.solution_2(pipe, latents, text_embeddings, SIGMA_STEPS_CAP, NUM_INFERENCE_STEPS)
+    # print(model_confidence.solution_1(pipe, latents, text_embeddings, SIGMA_STEPS_CAP))
+    print(model_confidence.solution_2(pipe, latents, text_embeddings, NUMBER_TRIALS, NUM_INFERENCE_STEPS))
 
     t_index = torch.tensor([1], device="cuda", dtype=torch.long)
 
