@@ -5,11 +5,34 @@ from PIL import Image
 import torchvision.transforms as transforms
 import model_confidence
 import os
+import lira
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+def map_index_eve(idx: int):
+    if idx >= 64:
+        idx += 1
+    if idx >= 87:
+        idx += 1
+    if idx >= 128:
+        idx += 1
+    if idx >= 145:
+        idx += 1
+    return idx
+
+def pad(idx: int):
+    if idx < 10:
+        return "00" + str(idx)
+    elif idx < 100:
+        return "0" + str(idx)
+    else:
+        return str(idx)
 
 # Number of diffusion steps
 # Also known as T later on
 NUM_INFERENCE_STEPS = 50 # number of steps for the diffusion model
-SIGMA_STEPS_CAP = 1000 # arbitrary value to cap the number
+SIGMA_STEPS_CAP = 100 #1000 # arbitrary value to cap the number
 NUMBER_TRIALS = 100 # maybe bump up to 1000 later, but takes a while to run solution_2
 
 pipe: StableDiffusionPipeline = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5").to("cuda")
@@ -19,21 +42,23 @@ pipe.scheduler = DDIMScheduler.from_config(
   pipe.scheduler.config, rescale_betas_zero_snr=True, timestep_spacing="trailing", num_train_timesteps=NUM_INFERENCE_STEPS
 )
 
-# Load image with a relative path
-image_path = os.path.join(os.path.dirname(__file__), "../datasets/MOODENG/IMG_3786.jpg")
-img = Image.open(image_path)
+def generateLatent(filepath: str):
+    # Load image with a relative path
+    # image_path = os.path.join(os.path.dirname(__file__), f"../datasets/MOODENG/IMG_3786.jpg")
+    img = Image.open(filepath)
 
-preprocess = transforms.Compose([
-  transforms.Resize((512, 512)),
-  transforms.ToTensor(),
-  transforms.Normalize([0.5], [0.5]) # Stable Diffusion normalization
-])
+    preprocess = transforms.Compose([
+        transforms.Resize((512, 512)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5], [0.5]) # Stable Diffusion normalization
+    ])
 
-# Generate z_0
-img_tensor = preprocess(img).unsqueeze(0).to("cuda")
-# not sure if have to multiply by .18??
-latents = pipe.vae.encode(img_tensor).latent_dist.sample() * 0.18215 
-print(latents.shape)
+    # Generate z_0
+    img_tensor = preprocess(img).unsqueeze(0).to("cuda")
+    # not sure if have to multiply by .18??
+    latents = pipe.vae.encode(img_tensor).latent_dist.sample() * 0.18215
+    print(latents.shape)
+    return latents
 
 # noise = torch.randn(latents.shape).to("cuda")
 # guidance_scale = 7.5 # This is the classifier-free guidance scale
@@ -41,7 +66,22 @@ print(latents.shape)
 # Conditioning (prompt)
 prompt = "a pygmy hippo"
 text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
+SHADOW_SEEDS = [1825, 410, 4507, 4013, 3658, 2287, 1680, 8936, 1425, 9675, 6913, 521, 489, 1536, 3583, 3812]
 
+SPLITS = {
+        "train" : [152, 6, 153, 52, 98, 78, 122, 2, 63, 20, 61, 74, 30, 129, 155, 57, 104, 14, 23, 150, 120, 73, 156, 85, 115, 51, 8, 105, 36, 108, 62, 112, 143, 25, 103, 16, 146, 124, 90, 107, 92, 75, 60, 114, 109, 127, 84, 123, 56, 157, 100, 141, 131, 145, 21, 139, 0, 46, 89, 95, 48, 80, 49, 125, 117, 64, 134, 77, 110, 128, 3, 11, 17, 140, 151, 81, 45, 26, 42, 10, 41, 5, 87, 149, 38, 72, 12, 28, 47, 22, 88, 133, 101, 4, 1, 44, 93, 40, 138, 97, 126, 113, 86, 96, 137, 68, 118, 33, 106, 147, 31, 29, 55, 18, 53, 111, 50, 142, 70],
+        "in_raw" : [29, 25, 10, 1, 7, 2, 31, 26, 4, 17, 13, 11, 28, 6, 30, 5, 18, 35, 23, 3],
+        "eval" : [43, 121, 82, 35, 15, 91, 135, 130, 34, 54, 116, 154, 37, 9, 99, 119, 71, 19, 32, 67, 13, 24, 76, 79, 83, 58, 65, 102, 59, 144, 66, 136, 132, 94, 39, 69, 7, 148, 27]
+    }
+in_idxs = [SPLITS["eval"][i] for i in SPLITS["in_raw"]][:5]
+out_idxs = [i for i in range(158) if i not in (SPLITS["train"] + in_idxs)][:5]
+
+in_filepaths = [f"../../../datasets/evectrl/image-{pad(map_index_eve(idx))}.jpg" for idx in in_idxs]
+out_filepaths = [f"../../../datasets/evectrl/image-{pad(map_index_eve(idx))}.jpg" for idx in out_idxs]
+target_path = "../../../ti/eve_ctrl_target/64/learned_embeds-steps-10000.safetensors"
+shadow_paths = [f"../../../ti/eve_ctrl_shadow/64/{shadow_seed}/learned_embeds-steps-10000.safetensors" for shadow_seed in SHADOW_SEEDS][:2]
+token = "<eve>"
+granularity = 500 
 
 with torch.no_grad():
   with autocast("cuda"):
@@ -52,10 +92,33 @@ with torch.no_grad():
     # Make sure pipe has scheduler set up.
     # TODO: Workout SIGMA_STEPS_CAP vs NUM_INFERENCE_STEPS
     # print(model_confidence.solution_1(pipe, latents, text_embeddings, SIGMA_STEPS_CAP))
-    print(model_confidence.solution_2(pipe, latents, text_embeddings, NUMBER_TRIALS, NUM_INFERENCE_STEPS))
+    # print(model_confidence.solution_2(pipe, latents, text_embeddings, NUMBER_TRIALS, NUM_INFERENCE_STEPS))
+    ins, outs = [], []
+    # Maybe try to parellelize if this is a bottleneck
+    for filepath in in_filepaths:
+        ins.append(generateLatent(filepath))
+    
+    for filepath in out_filepaths:
+        outs.append(generateLatent(filepath))
+    
+    fprs, tprs, _, _ = lira.threshold_attack_1(pipe, text_embeddings, SIGMA_STEPS_CAP, target_path, shadow_paths, ins, outs, token, granularity)
 
-    t_index = torch.tensor([1], device="cuda", dtype=torch.long)
 
-    denoising_vector = pipe.unet(latents, t_index, encoder_hidden_states=text_embeddings).sample
+    #t_index = torch.tensor([1], device="cuda", dtype=torch.long)
 
-    print(denoising_vector.shape)
+    #denoising_vector = pipe.unet(latents, t_index, encoder_hidden_states=text_embeddings).sample
+
+    #print(denoising_vector.shape)
+
+    plt.figure(figsize=(8, 6))
+
+    sns.lineplot(x=fprs, y=tprs, label=f"Seed")
+
+    # Finalize ROC plot
+    plt.xlabel("FPR")
+    plt.ylabel("TPR")
+    plt.title("ROC Plot")
+    plt.plot([1e-4, 1], [1e-4, 1], color='lightgrey', linestyle='--', label="y=x")
+    plt.legend()
+    plt.savefig(f"../roc_plot.png", format="png", dpi=300)
+    plt.close()

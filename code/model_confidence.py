@@ -1,6 +1,7 @@
 from diffusers import StableDiffusionPipeline
 import torch
 
+
 def find_closest_timestep(s, alphas, alpha_lines):
   """
   Implements t(s) = argmin_t |alpha_line_s - alpha_t|
