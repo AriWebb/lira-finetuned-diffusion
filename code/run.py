@@ -32,7 +32,7 @@ def pad(idx: int):
 # Number of diffusion steps
 # Also known as T later on
 NUM_INFERENCE_STEPS = 50 # number of steps for the diffusion model
-SIGMA_STEPS_CAP = 100 #1000 # arbitrary value to cap the number
+SIGMA_STEPS_CAP = 250 #1000 # arbitrary value to cap the number
 NUMBER_TRIALS = 100 # maybe bump up to 1000 later, but takes a while to run solution_2
 
 pipe: StableDiffusionPipeline = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5").to("cuda")
@@ -57,14 +57,14 @@ def generateLatent(filepath: str):
     img_tensor = preprocess(img).unsqueeze(0).to("cuda")
     # not sure if have to multiply by .18??
     latents = pipe.vae.encode(img_tensor).latent_dist.sample() * 0.18215
-    print(latents.shape)
+    #print(latents.shape)
     return latents
 
 # noise = torch.randn(latents.shape).to("cuda")
 # guidance_scale = 7.5 # This is the classifier-free guidance scale
 
 # Conditioning (prompt)
-prompt = "a pygmy hippo"
+prompt = "a drawing in the style of <eve>"
 text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
 SHADOW_SEEDS = [1825, 410, 4507, 4013, 3658, 2287, 1680, 8936, 1425, 9675, 6913, 521, 489, 1536, 3583, 3812]
 
@@ -73,20 +73,20 @@ SPLITS = {
         "in_raw" : [29, 25, 10, 1, 7, 2, 31, 26, 4, 17, 13, 11, 28, 6, 30, 5, 18, 35, 23, 3],
         "eval" : [43, 121, 82, 35, 15, 91, 135, 130, 34, 54, 116, 154, 37, 9, 99, 119, 71, 19, 32, 67, 13, 24, 76, 79, 83, 58, 65, 102, 59, 144, 66, 136, 132, 94, 39, 69, 7, 148, 27]
     }
-in_idxs = [SPLITS["eval"][i] for i in SPLITS["in_raw"]][:5]
-out_idxs = [i for i in range(158) if i not in (SPLITS["train"] + in_idxs)][:5]
+in_idxs = [SPLITS["eval"][i] for i in SPLITS["in_raw"]]
+out_idxs = [i for i in range(158) if i not in (SPLITS["train"] + in_idxs)]
 
 in_filepaths = [f"../../../datasets/evectrl/image-{pad(map_index_eve(idx))}.jpg" for idx in in_idxs]
 out_filepaths = [f"../../../datasets/evectrl/image-{pad(map_index_eve(idx))}.jpg" for idx in out_idxs]
 target_path = "../../../ti/eve_ctrl_target/64/learned_embeds-steps-10000.safetensors"
-shadow_paths = [f"../../../ti/eve_ctrl_shadow/64/{shadow_seed}/learned_embeds-steps-10000.safetensors" for shadow_seed in SHADOW_SEEDS][:2]
+shadow_paths = [f"../../../ti/eve_ctrl_shadow/64/{shadow_seed}/learned_embeds-steps-10000.safetensors" for shadow_seed in SHADOW_SEEDS]
 token = "<eve>"
 granularity = 500 
 
 with torch.no_grad():
   with autocast("cuda"):
     # Generate y for calling solutions
-    text_embeddings = pipe.text_encoder(text_input)[0]
+    #text_embeddings = pipe.text_encoder(text_input)[0]
 
     # Sample calls to model_confidence for solution_1, solution_2
     # Make sure pipe has scheduler set up.
@@ -101,24 +101,32 @@ with torch.no_grad():
     for filepath in out_filepaths:
         outs.append(generateLatent(filepath))
     
-    fprs, tprs, _, _ = lira.threshold_attack_1(pipe, text_embeddings, SIGMA_STEPS_CAP, target_path, shadow_paths, ins, outs, token, granularity)
 
+    for K in [0.25, 1, 4, 16, 64, 256]:
+        fprs, tprs, in_vals, out_vals = lira.threshold_attack_1(pipe, prompt, SIGMA_STEPS_CAP, target_path, shadow_paths, ins, outs, token, granularity, K)
+        #t_index = torch.tensor([1], device="cuda", dtype=torch.long)
 
-    #t_index = torch.tensor([1], device="cuda", dtype=torch.long)
+        #denoising_vector = pipe.unet(latents, t_index, encoder_hidden_states=text_embeddings).sample
 
-    #denoising_vector = pipe.unet(latents, t_index, encoder_hidden_states=text_embeddings).sample
+        #print(denoising_vector.shape)
 
-    #print(denoising_vector.shape)
+        # Log the results to a file
+        with open("log.txt", "a") as log_file:
+            log_file.write(f"K={K}\n")
+            log_file.write(f"FPRs: {fprs}\n")
+            log_file.write(f"TPRs: {tprs}\n")
+            log_file.write(f"In Vals: {in_vals}\n")
+            log_file.write(f"Out Vals: {out_vals}\n\n")
 
-    plt.figure(figsize=(8, 6))
+        plt.figure(figsize=(8, 6))
 
-    sns.lineplot(x=fprs, y=tprs, label=f"Seed")
+        sns.lineplot(x=fprs, y=tprs, label=f"Seed")
 
-    # Finalize ROC plot
-    plt.xlabel("FPR")
-    plt.ylabel("TPR")
-    plt.title("ROC Plot")
-    plt.plot([1e-4, 1], [1e-4, 1], color='lightgrey', linestyle='--', label="y=x")
-    plt.legend()
-    plt.savefig(f"../roc_plot.png", format="png", dpi=300)
-    plt.close()
+        # Finalize ROC plot
+        plt.xlabel("FPR")
+        plt.ylabel("TPR")
+        plt.title(f"ROC Plot for K={K}")
+        plt.plot([1e-4, 1], [1e-4, 1], color='lightgrey', linestyle='--', label="y=x")
+        plt.legend()
+        plt.savefig(f"../plots/roc_plot_K={K}.png", format="png", dpi=300)
+        plt.close()

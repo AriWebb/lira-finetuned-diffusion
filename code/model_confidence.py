@@ -35,44 +35,46 @@ def get_alphas(pipe: StableDiffusionPipeline):
   return alphas
 
 #TODO: add typing and function definition so less confusing
-def solution_1(pipe: StableDiffusionPipeline, z_0, y, sigma_steps_cap):
-  alphas = get_alphas(pipe)
-  Z = torch.zeros((sigma_steps_cap, *z_0.shape), device="cuda")
-  # parallelized precomputation of alpha_lines
-  alpha_lines = 1 / (torch.arange(sigma_steps_cap, device="cuda")**2 + 1)
+def solution_1(pipe: StableDiffusionPipeline, z_0, y, K, sigma_steps_cap):
+    with torch.no_grad():
+        alphas = get_alphas(pipe)
+        Z = torch.zeros((sigma_steps_cap, *z_0.shape), device="cuda")
+        # parallelized precomputation of alpha_lines
+        alpha_lines = 1 / (torch.arange(sigma_steps_cap, device="cuda")**2 + 1)
 
-  # Forward Diffusion
-  for s in range(sigma_steps_cap-1):
-    Z_line_cur = Z[s] / (torch.sqrt(alpha_lines[s]))
-    t_s = find_closest_timestep(s, alphas, alpha_lines)
-    if t_s == 0:
-      # Use normal distribution sample when t_s is 0
-      normal_sample = torch.randn_like(Z[s])
-      Z_line_next = Z_line_cur + normal_sample
-    else:
-      # Regular case using UNet
-      Z_line_next = Z_line_cur + get_cached_unet(pipe, Z[s], y, t_s)
-    Z[s + 1] = alpha_lines[s+1] * Z_line_next
+        # Forward Diffusion
+        for s in range(sigma_steps_cap-1):
+            Z_line_cur = Z[s] / (torch.sqrt(alpha_lines[s]))
+            t_s = find_closest_timestep(s, alphas, alpha_lines)
+            if t_s == 0:
+                # Use normal distribution sample when t_s is 0
+                normal_sample = torch.randn_like(Z[s])
+                Z_line_next = Z_line_cur + normal_sample
+            else:
+                # Regular case using UNet
+                Z_line_next = Z_line_cur + get_cached_unet(pipe, Z[s], y, t_s)
+                Z[s + 1] = alpha_lines[s+1] * Z_line_next
 
-  # Reverse Diffusion
-  Z_hat = torch.zeros_like(Z)
-  for s in range(sigma_steps_cap-1, 0, -1):
-    print(s)
-    t_s = find_closest_timestep(s, alphas, alpha_lines)
-    z_hat_0 = (Z[s] - (torch.sqrt(1 - alpha_lines[s]) * get_cached_unet(pipe, Z[s], y, t_s))) / torch.sqrt(alpha_lines[s])
-    if t_s == 0:
-      Z_hat[s] = z_hat_0
-    else:
-      Z_hat[s] = torch.sqrt(alphas[t_s-1]) * z_hat_0 + torch.sqrt(1 - alphas[t_s-1]) * get_cached_unet(pipe, Z[s], y, t_s)
+        # Reverse Diffusion
+        Z_hat = torch.zeros_like(Z)
+        for s in range(sigma_steps_cap-1, 0, -1):
+            #print(s)
+            t_s = find_closest_timestep(s, alphas, alpha_lines)
+            z_hat_0 = (Z[s] - (torch.sqrt(1 - alpha_lines[s]) * get_cached_unet(pipe, Z[s], y, t_s))) / torch.sqrt(alpha_lines[s])
+            if t_s == 0:
+                Z_hat[s] = z_hat_0
+            else:
+                Z_hat[s] = torch.sqrt(alphas[t_s-1]) * z_hat_0 + torch.sqrt(1 - alphas[t_s-1]) * get_cached_unet(pipe, Z[s], y, t_s)
 
-  # NOTE: parallelize this sum??
-  print("FINISHED REVERSE, STARTING SUM")
-  log_p = sum(
-    torch.sum((Z_hat[s] - Z[s]) * (Z[s-1] - Z[s]))
-    for s in range(1, len(Z_hat))
-  )
-  print("FINISHED SUM")
-  return log_p
+        # NOTE: parallelize this sum??
+        print("FINISHED REVERSE, STARTING SUM")
+        log_p = sum(
+            torch.sum((Z_hat[s] - Z[s]) * (Z[s-1] - Z[s]))
+            for s in range(1, len(Z_hat))
+        )
+        print("FINISHED SUM")
+        base_prob = torch.norm(Z[sigma_steps_cap-1], p="fro") ** 2 / sigma_steps_cap
+        return K * log_p + base_prob
 
 #TODO: add typing and function definition so less confusing
 def solution_2(pipe: StableDiffusionPipeline, z_0, y, N, T):
@@ -82,8 +84,8 @@ def solution_2(pipe: StableDiffusionPipeline, z_0, y, N, T):
   alphas = get_alphas(pipe)  
 
   for i in range(N):
-    if i % 10 == 0:
-      print(f'on the {i} iteration')
+    #if i % 10 == 0:
+      #print(f'on the {i} iteration')
     t = torch.randint(1, T-1, (1,), device="cuda")
     # Sample epsilon from standard normal distribution N(0, I)
     epsilon = torch.randn_like(alphas[t]).to("cuda")
