@@ -22,21 +22,24 @@ def eval_lira_1(
     ):
     global counter
     counter += 1
-    pipe.tokenizer = CLIPTokenizer.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="tokenizer")
     print(f"Number of eval_lira_1 calls made: {counter}")
-    pipe.load_textual_inversion(target_path)
-    text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
-    y = pipe.text_encoder(text_input)[0]
-    target_val = solution_1(pipe, z_0, y, K, sigma_steps_cap).cpu()
-    shadow_vals = []
-    for path in shadow_paths:
-        pipe.tokenizer = CLIPTokenizer.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="tokenizer")
-        pipe.load_textual_inversion(path)
+    with torch.no_grad():
+        pipe.load_textual_inversion(target_path)
         text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
         y = pipe.text_encoder(text_input)[0]
-        shadow_vals.append(solution_1(pipe, z_0, y, K, sigma_steps_cap).cpu())
-    shadow_vals = np.array(shadow_vals)
-    return norm.cdf(target_val, shadow_vals.mean(), shadow_vals.std())
+        target_val = solution_1(pipe, z_0, y, K, sigma_steps_cap).cpu()
+        pipe.unload_textual_inversion()
+        shadow_vals = []
+        for path in shadow_paths:
+            pipe.load_textual_inversion(path)
+            text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
+            y = pipe.text_encoder(text_input)[0]
+            CLIPTokenizer.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="tokenizer")
+            shadow_vals.append(solution_1(pipe, z_0, y, K, sigma_steps_cap).cpu())
+            pipe.unload_textual_inversion()
+        shadow_vals = np.array(shadow_vals)
+        print(norm.cdf(target_val, shadow_vals.mean(), shadow_vals.std()))
+        return norm.cdf(target_val, shadow_vals.mean(), shadow_vals.std())
 
 def threshold_attack_1(
                 pipe: StableDiffusionPipeline, prompt, sigma_steps_cap,

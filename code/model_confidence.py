@@ -23,7 +23,8 @@ def get_cached_unet(pipe: StableDiffusionPipeline, z, y, t, cache=unet_cache):
   
   if cache_key not in cache:
     # If not in cache, compute and store
-    cache[cache_key] = pipe.unet(z, t, y).sample
+    with torch.no_grad():
+        cache[cache_key] = pipe.unet(z, t, y).sample
   
   return cache[cache_key]
 
@@ -53,7 +54,7 @@ def solution_1(pipe: StableDiffusionPipeline, z_0, y, K, sigma_steps_cap):
             else:
                 # Regular case using UNet
                 Z_line_next = Z_line_cur + get_cached_unet(pipe, Z[s], y, t_s)
-                Z[s + 1] = alpha_lines[s+1] * Z_line_next
+            Z[s + 1] = alpha_lines[s+1] * Z_line_next
 
         # Reverse Diffusion
         Z_hat = torch.zeros_like(Z)
@@ -73,6 +74,8 @@ def solution_1(pipe: StableDiffusionPipeline, z_0, y, K, sigma_steps_cap):
             for s in range(1, len(Z_hat))
         )
         print("FINISHED SUM")
+        global unet_cache
+        unet_cache = {}
         base_prob = torch.norm(Z[sigma_steps_cap-1], p="fro") ** 2 / sigma_steps_cap
         return K * log_p + base_prob
 

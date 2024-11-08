@@ -57,7 +57,6 @@ def generateLatent(filepath: str):
     img_tensor = preprocess(img).unsqueeze(0).to("cuda")
     # not sure if have to multiply by .18??
     latents = pipe.vae.encode(img_tensor).latent_dist.sample() * 0.18215
-    #print(latents.shape)
     return latents
 
 # noise = torch.randn(latents.shape).to("cuda")
@@ -100,9 +99,8 @@ with torch.no_grad():
     
     for filepath in out_filepaths:
         outs.append(generateLatent(filepath))
-    
 
-    for K in [0.25, 1, 4, 16, 64, 256]:
+    for K in [0.0625, 0.25, 1, 4, 16, 64, 256]:
         fprs, tprs, in_vals, out_vals = lira.threshold_attack_1(pipe, prompt, SIGMA_STEPS_CAP, target_path, shadow_paths, ins, outs, token, granularity, K)
         #t_index = torch.tensor([1], device="cuda", dtype=torch.long)
 
