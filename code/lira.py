@@ -29,16 +29,19 @@ def eval_lira_1(
         y = pipe.text_encoder(text_input)[0]
         target_val = solution_1(pipe, z_0, y, K, sigma_steps_cap).cpu()
         pipe.unload_textual_inversion()
+        #print(f"target {target_val}")
         shadow_vals = []
         for path in shadow_paths:
             pipe.load_textual_inversion(path)
             text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
             y = pipe.text_encoder(text_input)[0]
             CLIPTokenizer.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="tokenizer")
-            shadow_vals.append(solution_1(pipe, z_0, y, K, sigma_steps_cap).cpu())
+            shadow_val = solution_1(pipe, z_0, y, K, sigma_steps_cap).cpu()
+            shadow_vals.append(shadow_val)
             pipe.unload_textual_inversion()
+            #print(f"shadow {shadow_val}")
         shadow_vals = np.array(shadow_vals)
-        print(norm.cdf(target_val, shadow_vals.mean(), shadow_vals.std()))
+        #print(norm.cdf(target_val, shadow_vals.mean(), shadow_vals.std()))
         return norm.cdf(target_val, shadow_vals.mean(), shadow_vals.std())
 
 def threshold_attack_1(

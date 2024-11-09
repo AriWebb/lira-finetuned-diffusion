@@ -8,6 +8,7 @@ import os
 import lira
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
 
 
 def map_index_eve(idx: int):
@@ -45,6 +46,23 @@ pipe.scheduler = DDIMScheduler.from_config(
 def generateLatent(filepath: str):
     # Load image with a relative path
     # image_path = os.path.join(os.path.dirname(__file__), f"../datasets/MOODENG/IMG_3786.jpg")
+    image = Image.open(filepath)
+    if not image.mode == "RGB":
+        image = image.convert("RGB")
+
+    img = np.array(image).astype(np.uint8)
+    image = Image.fromarray(img)
+    image = image.resize((512, 512), resample=Image.BICUBIC)
+    image = transforms.RandomHorizontalFlip(p=0.5)(image)
+    image = np.array(image).astype(np.uint8)
+    image = (image / 127.5 - 1.0).astype(np.float32)
+    x = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).to("cuda").half() 
+
+    latents = pipe.vae.encode(x).latent_dist.sample().to("cuda") * pipe.vae.config.scaling_factor
+
+    return latents
+
+    """
     img = Image.open(filepath)
 
     preprocess = transforms.Compose([
@@ -58,12 +76,13 @@ def generateLatent(filepath: str):
     # not sure if have to multiply by .18??
     latents = pipe.vae.encode(img_tensor).latent_dist.sample() * 0.18215
     return latents
+    """
 
 # noise = torch.randn(latents.shape).to("cuda")
 # guidance_scale = 7.5 # This is the classifier-free guidance scale
 
 # Conditioning (prompt)
-prompt = "a drawing in the style of <eve>"
+prompt = "a painting"
 text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
 SHADOW_SEEDS = [1825, 410, 4507, 4013, 3658, 2287, 1680, 8936, 1425, 9675, 6913, 521, 489, 1536, 3583, 3812]
 
