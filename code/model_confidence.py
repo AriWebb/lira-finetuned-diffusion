@@ -99,7 +99,6 @@ def solution_2(pipe: StableDiffusionPipeline, z_0, y, N, T):
     U[i-1] = torch.dot((z_hat_t_minus_one - z_t).view(-1), (z_t_minus_one - z_t).view(-1))
     if i % 10 == 0:
       for i in [['z_t', z_t], ['z_t_minus_one',z_t_minus_one], ['z_hat_t_minus_one', z_hat_t_minus_one]]:
-        
         print(f'{i[0]} sum: {torch.sum(i[1])}')  
 
   # Before calculating u_hat, check for NaN values in U
