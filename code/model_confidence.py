@@ -80,11 +80,12 @@ def solution_1(pipe: StableDiffusionPipeline, z_0, y, K, sigma_steps_cap):
         return K * log_p + base_prob
 
 #TODO: add typing and function definition so less confusing
-def solution_2(pipe: StableDiffusionPipeline, z_0, y, N, T):
+def solution_2(pipe: StableDiffusionPipeline, z_0, y, N):
   # Z = torch.zeros((T, *z_0.shape), device="cuda")
   U = torch.zeros((N,), device="cuda")
 
-  alphas = get_alphas(pipe)  
+  alphas = get_alphas(pipe)
+  T = len(alphas)
 
   for i in range(N):
     #if i % 10 == 0:
@@ -97,9 +98,9 @@ def solution_2(pipe: StableDiffusionPipeline, z_0, y, N, T):
     z_hat_0 = (z_t - torch.sqrt(1 - alphas[t]) * pipe.unet(z_t, t, y).sample) / torch.sqrt(alphas[t])
     z_hat_t_minus_one = torch.sqrt(alphas[t-1]) * z_hat_0 + torch.sqrt(1 - alphas[t-1]) * pipe.unet(z_t, t, y).sample
     U[i-1] = torch.dot((z_hat_t_minus_one - z_t).view(-1), (z_t_minus_one - z_t).view(-1))
-    if i % 10 == 0:
-      for i in [['z_t', z_t], ['z_t_minus_one',z_t_minus_one], ['z_hat_t_minus_one', z_hat_t_minus_one]]:
-        print(f'{i[0]} sum: {torch.sum(i[1])}')  
+    # if i % 10 == 0:
+    #   for i in [['z_t', z_t], ['z_t_minus_one',z_t_minus_one], ['z_hat_t_minus_one', z_hat_t_minus_one]]:
+    #     print(f'{i[0]} sum: {torch.sum(i[1])}')  
 
   # Before calculating u_hat, check for NaN values in U
   if torch.isnan(U).any():

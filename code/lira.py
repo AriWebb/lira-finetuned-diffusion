@@ -61,7 +61,7 @@ def threshold_attack_1(
     return fprs, tprs, in_vals, out_vals
 
 def eval_lira_2(
-        pipe: StableDiffusionPipeline, z_0, prompt, sigma_steps_cap, # y = a drawing in the style of <*> 
+        pipe: StableDiffusionPipeline, z_0, prompt, # y = a drawing in the style of <*> 
         target_path : str,
         shadow_paths : List[str],
         token : str,
@@ -74,7 +74,7 @@ def eval_lira_2(
         pipe.load_textual_inversion(target_path)
         text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
         y = pipe.text_encoder(text_input)[0]
-        target_val = solution_2(pipe, z_0, y, N, sigma_steps_cap).cpu()
+        target_val = solution_2(pipe, z_0, y, N).cpu()
         pipe.unload_textual_inversion()
         
         shadow_vals = []
@@ -83,7 +83,7 @@ def eval_lira_2(
             text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
             y = pipe.text_encoder(text_input)[0]
             CLIPTokenizer.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="tokenizer")
-            shadow_val = solution_2(pipe, z_0, y, N, sigma_steps_cap).cpu()
+            shadow_val = solution_2(pipe, z_0, y, N).cpu()
             shadow_vals.append(shadow_val)
             pipe.unload_textual_inversion()
             
@@ -91,7 +91,7 @@ def eval_lira_2(
         return norm.cdf(target_val, shadow_vals.mean(), shadow_vals.std())
 
 def threshold_attack_2(
-                pipe: StableDiffusionPipeline, prompt, sigma_steps_cap,
+                pipe: StableDiffusionPipeline, prompt,
                 target_path : str,
                 shadow_paths : Optional[List[str]],
                 ins : List[torch.Tensor],
@@ -100,8 +100,8 @@ def threshold_attack_2(
                 granularity : int,
                 N : float,
             ):
-    in_vals = np.array([eval_lira_2(pipe, z0, prompt, sigma_steps_cap, target_path, shadow_paths, token, N) for z0 in ins])
-    out_vals = np.sort([eval_lira_2(pipe, z0, prompt, sigma_steps_cap, target_path, shadow_paths, token, N) for z0 in outs])
+    in_vals = np.array([eval_lira_2(pipe, z0, prompt, target_path, shadow_paths, token, N) for z0 in ins])
+    out_vals = np.sort([eval_lira_2(pipe, z0, prompt, target_path, shadow_paths, token, N) for z0 in outs])
     thresholds = np.linspace(out_vals[0], out_vals[-1], granularity + 1)
     fprs = np.sum(out_vals[:, np.newaxis] < thresholds, axis=0) / len(out_vals)
     tprs = np.sum(in_vals[:, np.newaxis] < thresholds, axis=0) / len(in_vals)
