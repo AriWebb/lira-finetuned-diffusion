@@ -113,7 +113,7 @@ def solution_2(pipe: StableDiffusionPipeline, z_0, y, N):
 
 
 # Adapted from https://github.com/py85252876/Reconstruction-based-Attack
-def pang_solution(pipe: StableDiffusionPipeline, z_0, y, batch_num=10, inference=100):
+def pang_solution(pipe: StableDiffusionPipeline, z_0, y, batch_num=10, inference=50):
     # Initialize DeiT model and feature extractor
     feature_extractor = DeiTFeatureExtractor.from_pretrained("facebook/deit-base-distilled-patch16-384")
     model = DeiTModel.from_pretrained("facebook/deit-base-distilled-patch16-384", add_pooling_layer=False)

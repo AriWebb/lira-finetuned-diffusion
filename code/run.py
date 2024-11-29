@@ -50,6 +50,7 @@ def generateLatent(filepath: str):
   image = Image.open(filepath)
   if not image.mode == "RGB":
     image = image.convert("RGB")
+  return image
 
   img = np.array(image).astype(np.uint8)
   image = Image.fromarray(img)
@@ -126,15 +127,16 @@ SPLITS = {
 in_idxs = [SPLITS["eval"][i] for i in SPLITS["in_raw"]]
 out_idxs = [i for i in range(158) if i not in (SPLITS["train"] + in_idxs)]
 
-in_filepaths = [f"../datasets/evectrl/image-{pad(map_index_eve(idx))}.jpg" for idx in in_idxs]
-out_filepaths = [f"../datasets/evectrl/image-{pad(map_index_eve(idx))}.jpg" for idx in out_idxs]
-target_path = "../datasets/eve_ctrl_target/64/learned_embeds-steps-10000.safetensors"
-shadow_paths = [f"../datasets/eve_ctrl_shadow/64/{shadow_seed}/learned_embeds-steps-10000.safetensors" for shadow_seed in SHADOW_SEEDS]
+in_filepaths = [f"../../../datasets/evectrl/image-{pad(map_index_eve(idx))}.jpg" for idx in in_idxs]
+out_filepaths = [f"../../../datasets/evectrl/image-{pad(map_index_eve(idx))}.jpg" for idx in out_idxs]
+target_path = "../../../ti/eve_ctrl_target/64/learned_embeds-steps-10000.safetensors"
+shadow_paths = [f"../../../ti/eve_ctrl_shadow/64/{shadow_seed}/learned_embeds-steps-10000.safetensors" for shadow_seed in SHADOW_SEEDS]
 token = "<eve>"
 granularity = 500 
 
 with torch.no_grad():
     with autocast("cuda"):
+        
     # Generate y for calling solutions
     #text_embeddings = pipe.text_encoder(text_input)[0]
 
@@ -144,6 +146,7 @@ with torch.no_grad():
     # print(model_confidence.solution_1(pipe, latents, text_embeddings, SIGMA_STEPS_CAP))
     # print(model_confidence.solution_2(pipe, latents, text_embeddings, NUMBER_TRIALS, NUM_INFERENCE_STEPS))
         ins, outs = [], []
+        
     # Maybe try to parellelize if this is a bottleneck
         for filepath in in_filepaths:
             ins.append(generateLatent(filepath))
@@ -151,6 +154,9 @@ with torch.no_grad():
         for filepath in out_filepaths:
             outs.append(generateLatent(filepath))
 
+        fprs, tprs, in_vals, out_vals = lira.pang_attack(pipe, prompt, target_path, shadow_paths, ins, outs, granularity)
+        log_results(fprs, tprs, in_vals, out_vals, "pang")
+"""
         for K in [0.0625, 0.25, 1, 4, 16, 64, 256]:
             fprs, tprs, in_vals, out_vals = lira.threshold_attack_1(pipe, prompt, SIGMA_STEPS_CAP, target_path, shadow_paths, ins, outs, token, granularity, K)
             t_index = torch.tensor([1], device="cuda", dtype=torch.long)
@@ -169,9 +175,9 @@ with torch.no_grad():
     # N = 400
     # fprs, tprs, in_vals, out_vals = lira.threshold_attack_2(pipe, prompt, target_path, shadow_paths, ins, outs, token, granularity, N)
     # log_results(fprs, tprs, in_vals, out_vals, "lira_2", N)
+    """
 
-    fprs, tprs, in_vals, out_vals = lira.pang_attack(pipe, prompt, target_path, shadow_paths, ins, outs, granularity)
-    log_results(fprs, tprs, in_vals, out_vals, "pang")
+
     
 
 

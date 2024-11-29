@@ -112,6 +112,7 @@ def eval_pang(
         target_path : str,
         shadow_paths : List[str]
     ):
+    pipe.safety_checker = None
     global counter
     counter += 1
     print(f"Number of eval_pang calls made: {counter}")
@@ -119,7 +120,7 @@ def eval_pang(
         pipe.load_textual_inversion(target_path)
         text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
         y = pipe.text_encoder(text_input)[0]
-        target_val = pang_solution(pipe, z_0, y).cpu()
+        target_val = pang_solution(pipe, z_0, prompt)
         pipe.unload_textual_inversion()
         
         shadow_vals = []
@@ -128,7 +129,7 @@ def eval_pang(
             text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
             y = pipe.text_encoder(text_input)[0]
             CLIPTokenizer.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="tokenizer")
-            shadow_val = pang_solution(pipe, z_0, y).cpu()
+            shadow_val = pang_solution(pipe, z_0, prompt)
             shadow_vals.append(shadow_val)
             pipe.unload_textual_inversion()
             
