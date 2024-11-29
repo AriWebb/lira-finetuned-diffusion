@@ -1,5 +1,5 @@
 import torch
-from model_confidence import solution_1, solution_2
+from model_confidence import solution_1, solution_2, pang_solution
 from diffusers import StableDiffusionPipeline, DDIMScheduler
 from typing import Optional, List
 import numpy as np
@@ -102,6 +102,49 @@ def threshold_attack_2(
             ):
     in_vals = np.array([eval_lira_2(pipe, z0, prompt, target_path, shadow_paths, token, N) for z0 in ins])
     out_vals = np.sort([eval_lira_2(pipe, z0, prompt, target_path, shadow_paths, token, N) for z0 in outs])
+    thresholds = np.linspace(out_vals[0], out_vals[-1], granularity + 1)
+    fprs = np.sum(out_vals[:, np.newaxis] < thresholds, axis=0) / len(out_vals)
+    tprs = np.sum(in_vals[:, np.newaxis] < thresholds, axis=0) / len(in_vals)
+    return fprs, tprs, in_vals, out_vals
+
+def eval_pang(
+        pipe: StableDiffusionPipeline, z_0, prompt, # y = a drawing in the style of <*> 
+        target_path : str,
+        shadow_paths : List[str]
+    ):
+    global counter
+    counter += 1
+    print(f"Number of eval_pang calls made: {counter}")
+    with torch.no_grad():
+        pipe.load_textual_inversion(target_path)
+        text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
+        y = pipe.text_encoder(text_input)[0]
+        target_val = pang_solution(pipe, z_0, y).cpu()
+        pipe.unload_textual_inversion()
+        
+        shadow_vals = []
+        for path in shadow_paths:
+            pipe.load_textual_inversion(path)
+            text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
+            y = pipe.text_encoder(text_input)[0]
+            CLIPTokenizer.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="tokenizer")
+            shadow_val = pang_solution(pipe, z_0, y).cpu()
+            shadow_vals.append(shadow_val)
+            pipe.unload_textual_inversion()
+            
+        shadow_vals = np.array(shadow_vals)
+        return norm.cdf(target_val, shadow_vals.mean(), shadow_vals.std())
+
+def pang_attack(
+                pipe: StableDiffusionPipeline, prompt,
+                target_path : str,
+                shadow_paths : Optional[List[str]],
+                ins : List[torch.Tensor],
+                outs : List[torch.Tensor],
+                granularity : int,
+            ):
+    in_vals = np.array([eval_pang(pipe, z0, prompt, target_path, shadow_paths) for z0 in ins])
+    out_vals = np.sort([eval_pang(pipe, z0, prompt, target_path, shadow_paths) for z0 in outs])
     thresholds = np.linspace(out_vals[0], out_vals[-1], granularity + 1)
     fprs = np.sum(out_vals[:, np.newaxis] < thresholds, axis=0) / len(out_vals)
     tprs = np.sum(in_vals[:, np.newaxis] < thresholds, axis=0) / len(in_vals)

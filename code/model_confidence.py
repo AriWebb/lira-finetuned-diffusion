@@ -1,3 +1,4 @@
+from transformers import DeiTFeatureExtractor, DeiTModel
 from diffusers import StableDiffusionPipeline
 import torch
 
@@ -109,3 +110,50 @@ def solution_2(pipe: StableDiffusionPipeline, z_0, y, N):
 
   u_hat = 1 / N * sum(U)
   return u_hat
+
+
+# Adapted from https://github.com/py85252876/Reconstruction-based-Attack
+def pang_solution(pipe: StableDiffusionPipeline, z_0, y, batch_num=10, inference=100):
+    # Initialize DeiT model and feature extractor
+    feature_extractor = DeiTFeatureExtractor.from_pretrained("facebook/deit-base-distilled-patch16-384")
+    model = DeiTModel.from_pretrained("facebook/deit-base-distilled-patch16-384", add_pooling_layer=False)
+    model.to("cuda")
+    
+    # Get embedding of target image (z_0)
+    inputs_target = feature_extractor(z_0, return_tensors="pt")
+    inputs_target = {key: value.to("cuda") for key, value in inputs_target.items()}
+    with torch.no_grad():
+        outputs_target = model(**inputs_target)
+    target_embedding = outputs_target.last_hidden_state
+    
+    # Generate batch_num images and get their embeddings
+    generated_embeddings = []
+    for _ in range(batch_num):
+        # Generate image from prompt
+        image = pipe(y, num_inference_steps=inference, guidance_scale=7.5).images[0]
+        image = image.convert("RGB")
+        
+        # Get embedding
+        inputs = feature_extractor(image, return_tensors="pt")
+        inputs = {key: value.to("cuda") for key, value in inputs.items()}
+        with torch.no_grad():
+            outputs = model(**inputs)
+        generated_embeddings.append(outputs.last_hidden_state)
+    
+    # Stack all embeddings
+    generated_embeddings = torch.stack(generated_embeddings)
+    
+    # Compute similarity scores between target and generated images
+    similarities = []
+    for gen_embedding in generated_embeddings:
+        # Using cosine similarity as default metric
+        similarity = torch.nn.functional.cosine_similarity(
+            target_embedding.squeeze(), 
+            gen_embedding.squeeze(),
+            dim=0
+        ).mean()
+        similarities.append(similarity.item())
+    
+    # Return average similarity score
+    return sum(similarities) / len(similarities)
+

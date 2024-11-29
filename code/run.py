@@ -159,9 +159,12 @@ with torch.no_grad():
 
     #   #print(denoising_vector.shape)
     #   log_results(fprs, tprs, in_vals, out_vals, "lira_1", K)
-    N = 400
-    fprs, tprs, in_vals, out_vals = lira.threshold_attack_2(pipe, prompt, target_path, shadow_paths, ins, outs, token, granularity, N)
-    log_results(fprs, tprs, in_vals, out_vals, "lira_2", N)
+    # N = 400
+    # fprs, tprs, in_vals, out_vals = lira.threshold_attack_2(pipe, prompt, target_path, shadow_paths, ins, outs, token, granularity, N)
+    # log_results(fprs, tprs, in_vals, out_vals, "lira_2", N)
+
+    fprs, tprs, in_vals, out_vals = lira.pang_attack(pipe, prompt, target_path, shadow_paths, ins, outs, granularity)
+    log_results(fprs, tprs, in_vals, out_vals, "pang")
     
 
 
