@@ -126,10 +126,10 @@ SPLITS = {
 in_idxs = [SPLITS["eval"][i] for i in SPLITS["in_raw"]]
 out_idxs = [i for i in range(158) if i not in (SPLITS["train"] + in_idxs)]
 
-in_filepaths = [f"../../../datasets/evectrl/image-{pad(map_index_eve(idx))}.jpg" for idx in in_idxs]
-out_filepaths = [f"../../../datasets/evectrl/image-{pad(map_index_eve(idx))}.jpg" for idx in out_idxs]
-target_path = "../../../ti/eve_ctrl_target/64/learned_embeds-steps-10000.safetensors"
-shadow_paths = [f"../../../ti/eve_ctrl_shadow/64/{shadow_seed}/learned_embeds-steps-10000.safetensors" for shadow_seed in SHADOW_SEEDS]
+in_filepaths = [f"../datasets/evectrl/image-{pad(map_index_eve(idx))}.jpg" for idx in in_idxs]
+out_filepaths = [f"../datasets/evectrl/image-{pad(map_index_eve(idx))}.jpg" for idx in out_idxs]
+target_path = "../datasets/eve_ctrl_target/64/learned_embeds-steps-10000.safetensors"
+shadow_paths = [f"../datasets/eve_ctrl_shadow/64/{shadow_seed}/learned_embeds-steps-10000.safetensors" for shadow_seed in SHADOW_SEEDS]
 token = "<eve>"
 granularity = 500 
 
@@ -164,5 +164,14 @@ with torch.no_grad():
             fprs, tprs, in_vals, out_vals = lira.threshold_attack_2(pipe, prompt, SIGMA_STEPS_CAP, target_path, shadow_paths, ins, outs, token, granularity, N)
             log_results(fprs, tprs, in_vals, out_vals, "lira_2", N)
 
+    #   #print(denoising_vector.shape)
+    #   log_results(fprs, tprs, in_vals, out_vals, "lira_1", K)
+    # N = 400
+    # fprs, tprs, in_vals, out_vals = lira.threshold_attack_2(pipe, prompt, target_path, shadow_paths, ins, outs, token, granularity, N)
+    # log_results(fprs, tprs, in_vals, out_vals, "lira_2", N)
+
+    fprs, tprs, in_vals, out_vals = lira.pang_attack(pipe, prompt, target_path, shadow_paths, ins, outs, granularity)
+    log_results(fprs, tprs, in_vals, out_vals, "pang")
+    
 
 
