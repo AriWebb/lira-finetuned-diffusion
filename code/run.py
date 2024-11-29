@@ -81,7 +81,7 @@ def generateLatent(filepath: str):
 
 def log_results(fprs, tprs, in_vals, out_vals, solution: str, K: Optional[float] = None, N: Optional[float] = None):
   # Log the results to a file
-  with open("log.txt", "a") as log_file:
+  with open("log2.txt", "a") as log_file:
     if solution == "lira_1":
       log_file.write(f"K={K}\n")
     else:
@@ -134,7 +134,7 @@ token = "<eve>"
 granularity = 500 
 
 with torch.no_grad():
-  with autocast("cuda"):
+    with autocast("cuda"):
     # Generate y for calling solutions
     #text_embeddings = pipe.text_encoder(text_input)[0]
 
@@ -143,26 +143,26 @@ with torch.no_grad():
     # TODO: Workout SIGMA_STEPS_CAP vs NUM_INFERENCE_STEPS
     # print(model_confidence.solution_1(pipe, latents, text_embeddings, SIGMA_STEPS_CAP))
     # print(model_confidence.solution_2(pipe, latents, text_embeddings, NUMBER_TRIALS, NUM_INFERENCE_STEPS))
-    ins, outs = [], []
+        ins, outs = [], []
     # Maybe try to parellelize if this is a bottleneck
-    for filepath in in_filepaths:
-      ins.append(generateLatent(filepath))
+        for filepath in in_filepaths:
+            ins.append(generateLatent(filepath))
     
-    for filepath in out_filepaths:
-      outs.append(generateLatent(filepath))
+        for filepath in out_filepaths:
+            outs.append(generateLatent(filepath))
 
-    # for K in [0.0625, 0.25, 1, 4, 16, 64, 256]:
-    #   fprs, tprs, in_vals, out_vals = lira.threshold_attack_1(pipe, prompt, SIGMA_STEPS_CAP, target_path, shadow_paths, ins, outs, token, granularity, K)
-    #   #t_index = torch.tensor([1], device="cuda", dtype=torch.long)
+        for K in [0.0625, 0.25, 1, 4, 16, 64, 256]:
+            fprs, tprs, in_vals, out_vals = lira.threshold_attack_1(pipe, prompt, SIGMA_STEPS_CAP, target_path, shadow_paths, ins, outs, token, granularity, K)
+            t_index = torch.tensor([1], device="cuda", dtype=torch.long)
 
-    #   #denoising_vector = pipe.unet(latents, t_index, encoder_hidden_states=text_embeddings).sample
+            #denoising_vector = pipe.unet(latents, t_index, encoder_hidden_states=text_embeddings).sample
 
-    #   #print(denoising_vector.shape)
-    #   log_results(fprs, tprs, in_vals, out_vals, "lira_1", K)
-    
-    for N in [10, 100, 200]:
-      fprs, tprs, in_vals, out_vals = lira.threshold_attack_2(pipe, prompt, SIGMA_STEPS_CAP, target_path, shadow_paths, ins, outs, token, granularity, N)
-      log_results(fprs, tprs, in_vals, out_vals, "lira_2", N)
-    
+            #print(denoising_vector.shape)
+            log_results(fprs, tprs, in_vals, out_vals, "lira_1", K)
+        
+        for N in [10, 100, 200]:
+            fprs, tprs, in_vals, out_vals = lira.threshold_attack_2(pipe, prompt, SIGMA_STEPS_CAP, target_path, shadow_paths, ins, outs, token, granularity, N)
+            log_results(fprs, tprs, in_vals, out_vals, "lira_2", N)
+
 
 

@@ -76,7 +76,7 @@ def solution_1(pipe: StableDiffusionPipeline, z_0, y, K, sigma_steps_cap):
         print("FINISHED SUM")
         global unet_cache
         unet_cache = {}
-        base_prob = torch.norm(Z[sigma_steps_cap-1], p="fro") ** 2 / sigma_steps_cap
+        base_prob = -0.5 * torch.norm(Z[sigma_steps_cap-1], p="fro") ** 2 
         return K * log_p + base_prob
 
 #TODO: add typing and function definition so less confusing
