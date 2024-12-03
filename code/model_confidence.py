@@ -38,6 +38,7 @@ def get_alphas(pipe: StableDiffusionPipeline):
 
 #TODO: add typing and function definition so less confusing
 def solution_1(pipe: StableDiffusionPipeline, z_0, y, K, sigma_steps_cap):
+    torch.cuda.empty_cache()
     with torch.no_grad():
         alphas = get_alphas(pipe)
         Z = torch.zeros((sigma_steps_cap, *z_0.shape), device="cuda")
