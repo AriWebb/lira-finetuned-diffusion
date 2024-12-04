@@ -159,7 +159,7 @@ with torch.no_grad():
         #fprs, tprs, in_vals, out_vals = lira.pang_attack(pipe, prompt, target_path, shadow_paths, ins, outs, granularity)
         #log_results(fprs, tprs, in_vals, out_vals, "pang")
 
-        for K in []: #[0.0625, 0.25, 1, 4, 16, 64, 256]:
+        for K in [4]: #[0.0625, 0.25, 1, 4, 16, 64, 256]:
             torch.cuda.empty_cache()
             fprs, tprs, in_vals, out_vals = lira.threshold_attack_1(pipe, prompt, SIGMA_STEPS_CAP, target_path, shadow_paths, ins, outs, token, granularity, K, db=True)
             t_index = torch.tensor([1], device="cuda", dtype=torch.long)
