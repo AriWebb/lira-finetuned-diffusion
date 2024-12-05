@@ -50,7 +50,7 @@ def generateLatent(filepath: str):
   image = Image.open(filepath)
   if not image.mode == "RGB":
     image = image.convert("RGB")
-  #return image
+  return image
 
   img = np.array(image).astype(np.uint8)
   image = Image.fromarray(img)
@@ -82,7 +82,7 @@ def generateLatent(filepath: str):
 
 def log_results(fprs, tprs, in_vals, out_vals, solution: str, K: Optional[float] = None, N: Optional[float] = None):
   # Log the results to a file
-  with open("db_log1.txt", "a") as log_file:
+  with open("pang_ti_log.txt", "a") as log_file:
     if solution == "lira_1":
       log_file.write(f"K={K}\n")
     else:
@@ -129,10 +129,10 @@ out_idxs = [i for i in range(158) if i not in (SPLITS["train"] + in_idxs)]
 
 in_filepaths = [f"../../../datasets/evectrl/image-{pad(map_index_eve(idx))}.jpg" for idx in in_idxs]
 out_filepaths = [f"../../../datasets/evectrl/image-{pad(map_index_eve(idx))}.jpg" for idx in out_idxs]
-#target_path = "../../../ti/eve_ctrl_target/64/learned_embeds-steps-10000.safetensors"
-#shadow_paths = [f"../../../ti/eve_ctrl_shadow/64/{shadow_seed}/learned_embeds-steps-10000.safetensors" for shadow_seed in SHADOW_SEEDS]
-target_path = "../../../db/mia_target/unet"
-shadow_paths = [f"../../../db/mia_shadow/{shadow_seed}/unet" for shadow_seed in SHADOW_SEEDS]
+target_path = "../../../ti/eve_ctrl_target/64/learned_embeds-steps-10000.safetensors"
+shadow_paths = [f"../../../ti/eve_ctrl_shadow/64/{shadow_seed}/learned_embeds-steps-10000.safetensors" for shadow_seed in SHADOW_SEEDS]
+#target_path = "../../../db/mia_target/unet"
+#shadow_paths = [f"../../../db/mia_shadow/{shadow_seed}/unet" for shadow_seed in SHADOW_SEEDS]
 token = "<eve>"
 granularity = 500 
 
@@ -156,8 +156,10 @@ with torch.no_grad():
         for filepath in out_filepaths:
             outs.append(generateLatent(filepath))
 
-        #fprs, tprs, in_vals, out_vals = lira.pang_attack(pipe, prompt, target_path, shadow_paths, ins, outs, granularity)
-        #log_results(fprs, tprs, in_vals, out_vals, "pang")
+        fprs, tprs, in_vals, out_vals = lira.pang_attack(pipe, prompt, target_path, shadow_paths, ins, outs, granularity)
+        log_results(fprs, tprs, in_vals, out_vals, "pang")
+
+        """
 
         for K in [4]: #[0.0625, 0.25, 1, 4, 16, 64, 256]:
             torch.cuda.empty_cache()
@@ -178,7 +180,7 @@ with torch.no_grad():
     # N = 400
     # fprs, tprs, in_vals, out_vals = lira.threshold_attack_2(pipe, prompt, target_path, shadow_paths, ins, outs, token, granularity, N)
     # log_results(fprs, tprs, in_vals, out_vals, "lira_2", N)
-
+    """
 
 
     

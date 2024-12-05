@@ -142,9 +142,9 @@ def eval_pang(
     print(f"Number of eval_pang calls made: {counter}")
     with torch.no_grad():
         if db:
-            pipe.unet = UNet2DConditionModel.from_pretrained(path).half().to("cuda")
+            pipe.unet = UNet2DConditionModel.from_pretrained(target_path).half().to("cuda")
         else:
-            pipe.load_textual_inversion(path)
+            pipe.load_textual_inversion(target_path)
         text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
         y = pipe.text_encoder(text_input)[0]
         target_val = pang_solution(pipe, z_0, prompt)
