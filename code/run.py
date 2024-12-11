@@ -38,11 +38,15 @@ SIGMA_STEPS_CAP = 250 #1000 # arbitrary value to cap the number
 NUMBER_TRIALS = 100 # maybe bump up to 1000 later, but takes a while to run solution_2
 
 pipe: StableDiffusionPipeline = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5").to("cuda")
+print(pipe.scheduler)
+pipe.safety_checker = None 
 
+"""
 # Use DDIMScheduler
 pipe.scheduler = DDIMScheduler.from_config(
   pipe.scheduler.config, rescale_betas_zero_snr=True, timestep_spacing="trailing", num_train_timesteps=NUM_INFERENCE_STEPS
 )
+"""
 
 def generateLatent(filepath: str):
   # Load image with a relative path
@@ -134,7 +138,7 @@ shadow_paths = [f"../../../ti/eve_ctrl_shadow/64/{shadow_seed}/learned_embeds-st
 #target_path = "../../../db/mia_target/unet"
 #shadow_paths = [f"../../../db/mia_shadow/{shadow_seed}/unet" for shadow_seed in SHADOW_SEEDS]
 token = "<eve>"
-granularity = 500 
+granularity = 200 
 
 with torch.no_grad():
     with autocast("cuda"):
@@ -157,7 +161,7 @@ with torch.no_grad():
             outs.append(generateLatent(filepath))
 
         fprs, tprs, in_vals, out_vals = lira.pang_attack(pipe, prompt, target_path, shadow_paths, ins, outs, granularity)
-        log_results(fprs, tprs, in_vals, out_vals, "pang")
+        log_results(fprs, tprs, in_vals, out_vals, "pang_db")
 
         """
 

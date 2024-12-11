@@ -2,6 +2,9 @@ from transformers import DeiTFeatureExtractor, DeiTModel
 from diffusers import StableDiffusionPipeline
 import torch
 
+import hashlib
+import io
+
 
 def find_closest_timestep(s, alphas, alpha_lines):
   """
@@ -116,6 +119,7 @@ def solution_2(pipe: StableDiffusionPipeline, z_0, y, N):
 # Adapted from https://github.com/py85252876/Reconstruction-based-Attack
 def pang_solution(pipe: StableDiffusionPipeline, z_0, y, batch_num=10, inference=50):
     # Initialize DeiT model and feature extractor
+    pipe.safety_checker = None
     feature_extractor = DeiTFeatureExtractor.from_pretrained("facebook/deit-base-distilled-patch16-384")
     model = DeiTModel.from_pretrained("facebook/deit-base-distilled-patch16-384", add_pooling_layer=False)
     model.to("cuda")
@@ -129,11 +133,12 @@ def pang_solution(pipe: StableDiffusionPipeline, z_0, y, batch_num=10, inference
     
     # Generate batch_num images and get their embeddings
     generated_embeddings = []
-    for _ in range(batch_num):
+    for i in range(batch_num):
         # Generate image from prompt
+        #print(y)
         image = pipe(y, num_inference_steps=inference, guidance_scale=7.5).images[0]
         image = image.convert("RGB")
-        
+        image.save(f"imgdump/{i}.png")
         # Get embedding
         inputs = feature_extractor(image, return_tensors="pt")
         inputs = {key: value.to("cuda") for key, value in inputs.items()}

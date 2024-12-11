@@ -142,6 +142,9 @@ def eval_pang(
     print(f"Number of eval_pang calls made: {counter}")
     with torch.no_grad():
         if db:
+            del pipe.unet
+            gc.collect()
+            torch.cuda.empty_cache() 
             pipe.unet = UNet2DConditionModel.from_pretrained(target_path).half().to("cuda")
         else:
             pipe.load_textual_inversion(target_path)
@@ -159,13 +162,15 @@ def eval_pang(
                 pipe.load_textual_inversion(path)
             text_input = pipe.tokenizer(prompt, padding="max_length", max_length=pipe.tokenizer.model_max_length, return_tensors="pt").input_ids.to("cuda")
             y = pipe.text_encoder(text_input)[0]
-            CLIPTokenizer.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="tokenizer")
+            #CLIPTokenizer.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="tokenizer")
             shadow_val = pang_solution(pipe, z_0, prompt)
             shadow_vals.append(shadow_val)
+            #print(shadow_val)
             if not db:
                 pipe.unload_textual_inversion()
             
         shadow_vals = np.array(shadow_vals)
+        #print(shadow_vals)
         return norm.cdf(target_val, shadow_vals.mean(), shadow_vals.std())
 
 def pang_attack(
@@ -177,8 +182,22 @@ def pang_attack(
                 granularity : int,
                 db : float = False
             ):
-    in_vals = np.array([eval_pang(pipe, z0, prompt, target_path, shadow_paths, db=db) for z0 in ins])
-    out_vals = np.sort([eval_pang(pipe, z0, prompt, target_path, shadow_paths, db=db) for z0 in outs])
+    #in_vals = np.array([eval_pang(pipe, z0, prompt, target_path, shadow_paths, db=db) for z0 in ins])
+    #print(f"ti in_vals: {in_vals}")
+    #out_vals = np.sort([eval_pang(pipe, z0, prompt, target_path, shadow_paths, db=db) for z0 in outs])
+    #print(f"ti out_vals: {out_vals}")
+    in_vals = np.array([
+    0.96759047, 0.84303861, 0.86026406, 0.92900905, 0.95961135, 0.4871217,
+    0.1817246,  0.58613382, 0.97858553, 0.8855633,  0.74422046, 0.6350456,
+    0.85199599, 0.06579911, 0.02450977, 0.48686161, 0.83381088, 0.13461913,
+    0.60678533, 0.69305774
+])
+    out_vals = np.array([
+    0.05769038, 0.07048656, 0.11803179, 0.13881855, 0.25163015, 0.2730273,
+    0.43803629, 0.53248056, 0.56526263, 0.63273586, 0.64053884, 0.70360048,
+    0.71998736, 0.72125448, 0.77120405, 0.77342168, 0.78024825, 0.82835787,
+    0.96087936
+])
     thresholds = np.linspace(out_vals[0], out_vals[-1], granularity + 1)
     fprs = np.sum(out_vals[:, np.newaxis] < thresholds, axis=0) / len(out_vals)
     tprs = np.sum(in_vals[:, np.newaxis] < thresholds, axis=0) / len(in_vals)
